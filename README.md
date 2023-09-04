@@ -1,5 +1,5 @@
 ## 简介
-本项目是对 [nerf-pytorch](https://github.com/yenchenlin/nerf-pytorch) 进行中文注释。
+[nerf-pytorch](https://github.com/yenchenlin/nerf-pytorch) 源码中文注释，仅供个人学习使用。
 
 ## 参考
 
