@@ -3,5 +3,6 @@
 
 ## 参考
 
-[read-nerf-pytorch](https://github.com/xunull/read-nerf-pytorch)
-[Chinese-nerf-pytorch](https://github.com/akawincent/chinese-nerf-pytorch)
+1. [read-nerf-pytorch](https://github.com/xunull/read-nerf-pytorch)
+
+2. [Chinese-nerf-pytorch](https://github.com/akawincent/chinese-nerf-pytorch)
