@@ -297,13 +297,18 @@ def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=F
         depth_map: [num_rays]. Estimated distance to object.
     """
     # alpha 的计算，神经网络框架里缺少了这个激活函数，在这里起作用
+    # 1-exp(-sigma * delta) : 得到透明度 alpha ，其中 delta 为每两个采样点之间的间隔，即代码中的dists
     raw2alpha = lambda raw, dists, act_fn=F.relu: 1.-torch.exp(-act_fn(raw)*dists)
 
     # 采样点两两之间的差值
     dists = z_vals[...,1:] - z_vals[...,:-1]
     # 相当于添加了一个哨兵值进行隔离
+    # 即最后一个点与无限远的距离是 1e10
     dists = torch.cat([dists, torch.Tensor([1e10]).expand(dists[...,:1].shape)], -1)  # [N_rays, N_samples]
     # 一维升三维
+    # TODO: 乘2范数的作用是？
+    # 这里采用 2范数主要是因为相机原点到每个像素坐标所代表的向量的长度也是有所不同的
+    # NOTE: torch.norm()： 求对应维度上的范数，默认是2范数
     dists = dists * torch.norm(rays_d[...,None,:], dim=-1)
     # sigmoid激活后得到 rgb
     rgb = torch.sigmoid(raw[...,:3])  # [N_rays, N_samples, 3]
@@ -318,19 +323,24 @@ def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False, pytest=F
             noise = np.random.rand(*list(raw[...,3].shape)) * raw_noise_std
             noise = torch.Tensor(noise)
 
-    # 论文中的公式 3
+    # 论文中的公式 3 中 透明度 alpha
     alpha = raw2alpha(raw[...,3] + noise, dists)  # [N_rays, N_samples]
     # NOTE: torch.cumprod()：累计乘法
     # 后半部分即为 Ti 部分，该部分通过与 alpha 的关系得到
+    # 这部分则得到了某个像素的 transmittance
     # weights = alpha * tf.math.cumprod(1.-alpha + 1e-10, -1, exclusive=True)
     weights = alpha * torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)), 1.-alpha + 1e-10], -1), -1)[:, :-1]
     # 权重乘以 rgb 即得到公式3 的结果
     rgb_map = torch.sum(weights[...,None] * rgb, -2)  # [N_rays, 3]
     # 深度图
+    # transmittance * 采样点距离
     depth_map = torch.sum(weights * z_vals, -1)
     # TODO: 视差图
+    # 深度图的倒数
+    # torch.sun(weights, -1)：取值为 [0, 1]，即该点是否有东西，即为下面的 acc_map
     disp_map = 1./torch.max(1e-10 * torch.ones_like(depth_map), depth_map / torch.sum(weights, -1))
     # TODO: 累计权重
+    # 渲染公式中的不透明度,取值为 [0, 1]
     acc_map = torch.sum(weights, -1)
 
     if white_bkgd:
@@ -632,6 +642,10 @@ def train():
 
         # TODO: 白色背景为什么要进行这个操作
         if args.white_bkgd:
+            # 绘制白色背景的公式： 原图(R,G,B) * 透明度 + （1 - 透明度）
+            # if 透明度 = 1： 则原图（R,G,B）* 1 + 0 ——> 有物体的地方保持不变
+            # else 透明度 = 0： 则原图（R,G,B） * 0 + 1 ——> 没有物体的地方变为白色
+            # 把一张图片绘制到一张背景图的公式： 原图(R,G,B) * 透明度 + 背景图（R,G,B）* (1 - 透明度)
             images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
         else:
             images = images[...,:3]
@@ -793,6 +807,7 @@ def train():
             # 选取一批光线
             batch = rays_rgb[i_batch:i_batch+N_rand] # [B, 2+1, 3*?]
             # TODO:这里为什么还要transpose呢？
+            # [B, ro + rd + rgb , 3*?]， transpose后，第一维包含了 ro+rd+rgb
             batch = torch.transpose(batch, 0, 1)
             batch_rays, target_s = batch[:2], batch[2]
 

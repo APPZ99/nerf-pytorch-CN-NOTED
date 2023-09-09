@@ -66,6 +66,7 @@ def load_blender_data(basedir, half_res=False, testskip=1):
             poses.append(np.array(frame['transform_matrix']))
         # RGB 为图片色彩通道，A 为 Alpha，指图片的色彩空间，通常用作不透明参数
         # TODO:将每一张图片归一化到 0~1.
+        # 像素值为 0~255，故除以 255，将其归一化到0~1
         imgs = (np.array(imgs) / 255.).astype(np.float32) # keep all 4 channels (RGBA)
         poses = np.array(poses).astype(np.float32)
         counts.append(counts[-1] + imgs.shape[0])
@@ -83,6 +84,8 @@ def load_blender_data(basedir, half_res=False, testskip=1):
     H, W = imgs[0].shape[:2]
     # 读取相机角度以及计算焦距
     camera_angle_x = float(meta['camera_angle_x'])
+    # 焦距公式： (1/2 * 图像宽度) / tan(1/2 * fov) 
+    # fov : field of view 相机视角宽度
     focal = .5 * W / np.tan(.5 * camera_angle_x)
     
     # 一共渲染40帧，每9度一个间隔

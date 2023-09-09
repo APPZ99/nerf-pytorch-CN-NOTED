@@ -188,9 +188,12 @@ def get_rays_np(H, W, K, c2w):
     # indexing:取矩阵坐标
     i, j = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing='xy')
     # 将像素坐标转换到相机坐标系上，三维向量表示
+    # [400, 400, 3]
     dirs = np.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -np.ones_like(i)], -1)
     # Rotate ray directions from camera frame to the world frame
     # 将像素在相机坐标系下的点转到世界坐标系
+    # TODO: 操作复杂
+    # 直接矩阵乘法即可，原作者这里是 [400, 400, 1, 3] -> [400, 400, 3]
     rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
     # Translate camera frame's origin to the world frame. It is the origin of all rays.
     # 将相机坐标原点进行广播，即最终满足相机原点在世界坐标系下的表示
@@ -229,7 +232,7 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     # 计算累计分布函数
     # NOTE: torch.cumsum()：累加
     cdf = torch.cumsum(pdf, -1)
-    # TODO: 在第一个地方补零？
+    # TODO: 在第一个地方补零
     cdf = torch.cat([torch.zeros_like(cdf[...,:1]), cdf], -1)  # (batch, len(bins))
 
     # Take uniform samples
@@ -251,7 +254,7 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
         u = torch.Tensor(u)
 
     # Invert CDF
-    # NOTE: torch.contiguous()改变多为数组在内存中的存储顺序
+    # NOTE: torch.contiguous()改变多维数组在内存中的存储顺序
     u = u.contiguous()
     # NOTE:torch.searchsorted(x,y)，对 x 排序后，y 在 x 中寻找自己每个元素的位置
     inds = torch.searchsorted(cdf, u, right=True)
@@ -276,3 +279,6 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     samples = bins_g[...,0] + t * (bins_g[...,1]-bins_g[...,0])
 
     return samples
+
+
+
