@@ -262,20 +262,27 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     below = torch.max(torch.zeros_like(inds-1), inds-1)
     # 最大的位置就是cdf的上限位置，防止过头，跟上面的意义相同
     above = torch.min((cdf.shape[-1]-1) * torch.ones_like(inds), inds)
+    # 得到相邻两个采样点的区间
     inds_g = torch.stack([below, above], -1)  # (batch, N_samples, 2)
 
     # cdf_g = tf.gather(cdf, inds_g, axis=-1, batch_dims=len(inds_g.shape)-2)
     # bins_g = tf.gather(bins, inds_g, axis=-1, batch_dims=len(inds_g.shape)-2)
+    # 这里主要将 128 个新采样点通过 CDF 重新映射
     matched_shape = [inds_g.shape[0], inds_g.shape[1], cdf.shape[-1]]
     # NOTE: torch.gather()，根据索引取出对应元素
     # NOTE: torch.unsqueeze(),增加矩阵维度
+    # 对 cdf 进行扩展成 [batch, 128, 63]，通过 inds_g 取出每一条射线中的采样点对应的 cdf 值
     cdf_g = torch.gather(cdf.unsqueeze(1).expand(matched_shape), 2, inds_g)
+    # 操作同上，目的是取出新的 128 个采样点应该在的采样区间
     bins_g = torch.gather(bins.unsqueeze(1).expand(matched_shape), 2, inds_g)
 
     # TODO: 防止过小？
+    # 这里是防止采样区间过小
     denom = (cdf_g[...,1]-cdf_g[...,0])
     denom = torch.where(denom<1e-5, torch.ones_like(denom), denom)
+    # t 为线性插值系数
     t = (u-cdf_g[...,0])/denom
+    # 在原来 64 个采样点中进行线性插值，最终采样点为 64 + 128 = 256
     samples = bins_g[...,0] + t * (bins_g[...,1]-bins_g[...,0])
 
     return samples

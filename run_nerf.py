@@ -408,6 +408,7 @@ def render_rays(ray_batch,
         z_vals = near * (1.-t_vals) + far * (t_vals)
     else:
         # TODO: 在0~1？
+        # 倒数
         z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals))
 
     z_vals = z_vals.expand([N_rays, N_samples])
@@ -446,8 +447,10 @@ def render_rays(ray_batch,
         z_vals_mid = .5 * (z_vals[...,1:] + z_vals[...,:-1])
         # 精细网络的根据权重后得到的新采样点
         z_samples = sample_pdf(z_vals_mid, weights[...,1:-1], N_importance, det=(perturb==0.), pytest=pytest)
-        # torch.detach()，分离，防止方向传播
+        # torch.detach()，分离，防止反向传播
         # TODO: 防止传播到哪个网络？
+        # z_samples是从中间采样点z_vals_mid中根据权重进行采样得到的。
+        # 因为z_samples是通过采样操作得到的，并不是通过网络模型计算得到的，所以将其进行detach操作，防止梯度从z_samples传播到网络模型中。
         z_samples = z_samples.detach()
 
         z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
@@ -455,7 +458,7 @@ def render_rays(ray_batch,
         pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples + N_importance, 3]
 
         run_fn = network_fn if network_fine is None else network_fine
-#         raw = run_network(pts, fn=run_fn)
+        # raw = run_network(pts, fn=run_fn)
         # 使用精细网络得到的结果
         raw = network_query_fn(pts, viewdirs, run_fn)
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, raw_noise_std, white_bkgd, pytest=pytest)
